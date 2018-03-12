@@ -1,0 +1,264 @@
+---
+title: "NBTS SurveyMonkey Analysis"
+author: "Amanda Bates"
+output: pdf_document
+---
+
+```{{r setup, include = FALSE, message = FALSE, warning = FALSE, cache = FALSE}
+chooseCRANmirror(graphics = FALSE, ind = 1)
+knitr::opts_chunk$set(echo = TRUE)
+```
+Import data
+```{r}
+# Import csv file
+why <- read.csv('~/MSDS692/Why_overall.csv', header = FALSE, stringsAsFactors = FALSE)
+# Check the data
+head(why)
+```
+Create corpus
+```{r}
+# Load library
+library(tm)
+# Create corpus
+why.corpus <- Corpus(VectorSource(why$V1))
+```
+Check the corpus
+```{r}
+# Review corpus
+inspect(why.corpus)
+```
+Data cleaning
+Transform corpus
+```{r}
+# Remove whitespace
+why.corpus.cln <- tm_map(why.corpus, stripWhitespace)
+# Make lowercase
+why.corpus.cln <- tm_map(why.corpus.cln, content_transformer(tolower))
+# Remove stopwords
+why.corpus.cln <- tm_map(why.corpus.cln, removeWords, stopwords("english"))
+# Remove punctuation
+why.corpus.cln <- tm_map(why.corpus.cln, content_transformer(removePunctuation))
+```
+```{r}
+# Check corpus
+inspect(why.corpus.cln)
+```
+Data Exploration
+Create a DTM and TDM
+```{r}
+# Create document term matrix
+why.dtm <- DocumentTermMatrix(why.corpus.cln)
+# Create term document matrix
+why.tdm <- TermDocumentMatrix(why.corpus.cln)
+```
+Create Zipf's plot
+```{r}
+# Create Zpif's plot
+Zipf_plot(why.tdm)
+```
+Find terms that appear at least 5 times
+```{r}
+# Find terms that occur at least 5 times
+findFreqTerms(why.dtm, 5)
+```
+Data Visualization
+Create a wordcloud
+```{r}
+# Load required library
+library(wordcloud)
+# Create wordcloud with the most commonly used words larger and in the center
+wordcloud(why.corpus.cln, random.order = FALSE)
+```
+Text Clustering
+# Create lda model with 4 topics
+```{r}
+# Load required library
+library(topicmodels)
+# Create LDA model with 4 topics
+why.lda <- LDA(why.dtm, k = 4)
+# Review 7 terms associated with each topic
+term <- terms(why.lda, 7)
+(term <- apply(term, MARGIN = 2, paste, collapse = ", "))
+```
+Sentiment analysis
+```{r}
+# Load library
+library(SentimentAnalysis)
+# Perform sentiment analysis
+why.sentiment <- analyzeSentiment(why.corpus.cln)
+# Check the output of the sentiment analysis
+head(why.sentiment)
+# Visualize the results of the sentiment analysis
+plotSentiment(why.sentiment)
+# Get summary results from sentiment analysis
+summary(why.sentiment)
+```
+Create n-grams
+```{r}
+# Convert corpus to strings
+why.string <- as.character(why.corpus.cln)[1]
+# Separate words
+why.words <- strsplit(why.string, " ", fixed = TRUE) [[1]]
+library(NLP)
+# create bigrams
+why.bi <- vapply(ngrams(why.words, 2), paste, "", collapse = " ")
+# Check bigrams
+why.bi[1:3]
+```
+Text Clustering with n-grams
+```{r}
+library(RWeka)
+# Create bigramTokenizer
+BigramTokenizer <- function(x) NGramTokenizer(x, Weka_control(min = 2, max = 2))
+# Create bigram DTM
+why.bi.dtm <- DocumentTermMatrix(why.corpus.cln,
+                                 control = list(tokenize = BigramTokenizer))
+# Create bigram LDA model
+why.bigram.lda <- LDA(why.bi.dtm, k = 3)
+# Review 7 terms associated with each topic
+term.bi <- terms(why.bigram.lda, 7)
+(term.bi <- apply(term.bi, MARGIN = 2, paste, collapse = ", "))
+```
+K-means clustering
+```{r}
+# Create new DTM with TF-IDF
+why.tfidf <- DocumentTermMatrix(why.corpus.cln, control = list(weighting = weightTfIdf))
+# Check dimensions of DTM
+dim(why.tfidf)
+# Run k-means with 3 clusters
+why.kmeans <- kmeans(why.tfidf, 3, iter.max = 100)
+table(why.kmeans$cluster)
+# Identify ten words associated with each cluster
+for (i in 1:3) {
+  cat(paste("Cluster ", i, ": ", sep = ""))
+  s <- sort(why.kmeans$centers[i, ], decreasing = TRUE)
+  cat(names(s)[1:10], "\n")
+}
+```
+Additional question analysis
+Import data
+```{r}
+# Import csv file
+whynot <- read.csv('~/MSDS692/not_overall.csv', header = FALSE, stringsAsFactors = FALSE)
+# Check the data
+head(whynot)
+```
+Create corpus
+```{r}
+# Create corpus
+whynot.corpus <- Corpus(VectorSource(whynot$V1))
+# Review corpus
+inspect(whynot.corpus)
+```
+Data cleaning
+Transform corpus
+```{r}
+# Remove whitespace
+whynot.corpus.cln <- tm_map(whynot.corpus, stripWhitespace)
+# Make lowercase
+whynot.corpus.cln <- tm_map(whynot.corpus.cln, content_transformer(tolower))
+# Remove stopwords
+whynot.corpus.cln <- tm_map(whynot.corpus.cln, removeWords, stopwords("english"))
+# Remove punctuation
+whynot.corpus.cln <- tm_map(whynot.corpus.cln, content_transformer(removePunctuation))
+# Check corpus
+inspect(whynot.corpus.cln)
+```
+Data Exploration
+Create a DTM and TDM
+```{r}
+# Create document term matrix
+whynot.dtm <- DocumentTermMatrix(whynot.corpus.cln)
+# Create term document matrix
+whynot.tdm <- TermDocumentMatrix(whynot.corpus.cln)
+```
+Create Zipf's plot
+```{r}
+# Create Zpif's plot
+Zipf_plot(whynot.tdm)
+```
+Find terms that appear at least 10 times
+```{r}
+# Find terms that occur at least 10 times
+findFreqTerms(whynot.dtm, 10)
+```
+Data Visualization
+Create a wordcloud
+```{r}
+# Create wordcloud with the most commonly used words larger and in the center
+wordcloud(whynot.corpus.cln, random.order = FALSE)
+```
+Text Clustering
+```{r}
+# Remove empty documents
+# Code provided by agstudy
+row.totals <- apply(whynot.dtm, 1, sum)
+whynot.dtm <- whynot.dtm[row.totals > 0, ]
+# Create LDA model with 7 topics
+whynot.lda <- LDA(whynot.dtm, k = 7)
+# Review 7 terms associated with each topic
+term <- terms(whynot.lda, 7)
+(term <- apply(term, MARGIN = 2, paste, collapse = ", "))
+```
+Sentiment analysis
+```{r}
+# Perform sentiment analysis
+whynot.sentiment <- analyzeSentiment(whynot.corpus.cln)
+# Check the output of the sentiment analysis
+head(whynot.sentiment)
+# Visualize the results of the sentiment analysis
+plotSentiment(whynot.sentiment)
+# Get summary results from sentiment analysis
+summary(whynot.sentiment)
+```
+Create n-grams
+```{r}
+# Convert corpus to strings
+whynot.string <- as.character(whynot.corpus.cln)[1]
+# Separate words
+whynot.words <- strsplit(whynot.string, " ", fixed = TRUE) [[1]]
+# create bigrams
+whynot.bi <- vapply(ngrams(whynot.words, 2), paste, "", collapse = " ")
+# Check bigrams
+whynot.bi[1:3]
+```
+Text Clustering with n-grams
+```{r}
+# Create bigram DTM
+whynot.bi.dtm <- DocumentTermMatrix(whynot.corpus.cln,
+                                 control = list(tokenize = BigramTokenizer))
+# Remove empty terms
+# Code provided by agstudy
+bi.row.totals <- apply(whynot.bi.dtm, 1, sum)
+whynot.bi.dtm <- whynot.bi.dtm[bi.row.totals > 0, ]
+# Create bigram LDA model
+whynot.bigram.lda <- LDA(whynot.bi.dtm, k = 5)
+# Review 7 terms associated with each topic
+not.term.bi <- terms(whynot.bigram.lda, 7)
+(not.term.bi <- apply(not.term.bi, MARGIN = 2, paste, collapse = ", "))
+```
+K-means clustering
+```{r}
+# Create new DTM with TF-IDF
+whynot.tfidf <- DocumentTermMatrix(whynot.corpus.cln, control = list(weighting = weightTfIdf))
+# Check dimensions of DTM
+dim(whynot.tfidf)
+# Run k-means with 3 clusters
+whynot.kmeans <- kmeans(whynot.tfidf, 3, iter.max = 100)
+table(whynot.kmeans$cluster)
+# Identify ten words associated with each cluster
+for (i in 1:3) {
+  cat(paste("Cluster ", i, ": ", sep = ""))
+  s <- sort(whynot.kmeans$centers[i, ], decreasing = TRUE)
+  cat(names(s)[1:10], "\n")
+}
+```
+
+References
+agstudy. (2012). Remove empty documents from DocumentTermMatrix in R topicmodels? Retrieved from https://stackoverflow.com/questions/13944252/remove-empty-documents-from-documenttermmatrix-in-r-topicmodels
+Bhalla, D. R: Keep/drop columns from data frame. Retrieved from http://www.listendata.com/2015/06/r-keep-drop-columns-from-data-frame.html
+Feuerriegel, S. SentimentAnalysis. Retrieved from https://www.rdocumentation.org/packages/SentimentAnalysis/versions/1.3-0
+Spell Checker for R...qdap::check_spelling. (2014). Retrieved from https://trinkerrstuff.wordpress.com/2014/09/04/spell-checker-for-r-qdapcheck_spelling/
+techno@admin+. (2016). How to clean the twitter data using R-Twitter mining tutorial. Retrieved from http://technokarak.com/how-to-clean-the-twitter-data-using-r-twitter-mining-tutorial.html
+Xie, Y. (2012). R - Markdown avoiding package loading messages. Retrieved from https://stackoverflow.com/questions/13090838/r-markdown-avoiding-package-loading-messages
+Zhao, Y. (2016). Twitter data analysis with R - Text mining and social network analysis. Retrieved from http://www.rdatamining.com/docs/twitter-analysis-with-r
